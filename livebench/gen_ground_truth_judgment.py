@@ -25,7 +25,8 @@ from livebench.process_results.reasoning.zebra_puzzle.utils import get_zebra_puz
 from livebench.process_results.reasoning.spatial.utils import spatial_process_results
 from livebench.process_results.math.math_competitions.utils import mathcontest_process_results,aime_process_results 
 from livebench.process_results.math.olympiad.utils import proof_rearrangement_process_results
-from livebench.process_results.math.AMPS_Hard.utils import amps_hard_process_results 
+from livebench.process_results.math.AMPS_Hard.utils import amps_hard_process_results
+from livebench.process_results.custom_tests.basic_math.utils import basic_math_process_results 
 from livebench.process_results.writing.plot_unscrambling.utils import plot_unscrambling_process_results
 from livebench.process_results.writing.typos.utils import typos_process_results
 from livebench.process_results.writing.connections.utils import get_connections_puzzle_evaluator
@@ -90,7 +91,7 @@ def play_a_match_gt(match: MatchSingle, output_file: str | None = None, debug=Fa
     question_text = question["turns"][0]
     ground_truth = question.get("ground_truth", None)
     llm_answer = answer['choices'][0]['turns'][-1]
-    llm_answer = re.sub(f"<think>.*?<\/think>", "", llm_answer, flags=re.DOTALL)
+    llm_answer = re.sub(r"<think>.*?</think>", "", llm_answer, flags=re.DOTALL)
     score = 0
     category = None
 
@@ -127,6 +128,9 @@ def play_a_match_gt(match: MatchSingle, output_file: str | None = None, debug=Fa
         elif "amps_hard" in task_or_subtask:
             score = amps_hard_process_results(ground_truth, llm_answer, debug)
             category = "math"
+        elif task_or_subtask == "basic_math" or task in ["basic_math"]:
+            score = basic_math_process_results(ground_truth, llm_answer, debug)
+            category = "custom_tests"
         elif task_or_subtask == "web_of_lies_v2" or task_or_subtask == "web_of_lies_v3":
             if task_or_subtask == "web_of_lies_v2":
                 score = web_of_lies_process_results(ground_truth, llm_answer, debug)
@@ -355,7 +359,7 @@ def gen_judgments(
 
         for m in model_answers:
             for q in model_answers[m]:
-                model_answers[m][q]['choices'][0]['turns'][0] = re.sub(f"<think>.*?<\/think>", "", model_answers[m][q]['choices'][0]['turns'][0], flags=re.DOTALL).strip()
+                model_answers[m][q]['choices'][0]['turns'][0] = re.sub(r"<think>.*?</think>", "", model_answers[m][q]['choices'][0]['turns'][0], flags=re.DOTALL).strip()
 
         for model_id in models:
             scores = instruction_following_process_results(questions, model_answers, task_name, model_id, debug)

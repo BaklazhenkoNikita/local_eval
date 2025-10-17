@@ -86,6 +86,16 @@ cd ..
 ./run_and_show_results.sh qwen2.5:3b live_bench/math/olympiad 5
 ```
 
+### Custom Tests
+
+```bash
+# Basic Math (custom test - addition, subtraction, multiplication, division, fractions, percentages, powers)
+./run_and_show_results.sh qwen2.5:3b custom_tests/basic_math 4
+
+# You can create your own custom tests in data/custom_tests/
+# See data/custom_tests/basic_math/ for example structure
+```
+
 ### Coding Tasks
 
 ```bash
@@ -150,6 +160,9 @@ done
 for task in AMPS_Hard math_comp olympiad; do
     ./run_and_show_results.sh qwen2.5:3b live_bench/math/$task 5
 done
+
+# Run custom tests
+./run_and_show_results.sh qwen2.5:3b custom_tests/basic_math 4
 
 # Run all coding tasks
 for task in coding_completion LCB_generation; do
