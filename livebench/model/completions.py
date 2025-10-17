@@ -10,7 +10,7 @@ from openai import Stream
 from openai.types.chat import ChatCompletionChunk, ChatCompletion
 from tenacity import retry, stop_after_attempt, retry_if_exception_type, wait_fixed, wait_incrementing
 
-logging.basicConfig(stream=sys.stdout, level=logging.WARNING)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(message)s')
 
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ API_RETRY_SLEEP_MAX = 60
 API_ERROR_OUTPUT = "$ERROR$"
 
 # model api function takes in Model, list of messages, temperature, max tokens, api kwargs, and an api dict
-# returns tuple of (output, num tokens)
+# returns tuple of (output, num output tokens, metadata dict with optional prompt_tokens)
 Conversation = list[dict[str, str]]
 API_Kwargs = dict[str, str | float | int | dict[str, str] | None]
 
@@ -77,6 +77,9 @@ def chat_completion_openai(
 
     actual_api_kwargs = {key: (value if value is not None else NOT_GIVEN) for key, value in api_kwargs.items()}
 
+    # Start timing for inference metrics
+    start_time = time.time()
+
     try:
         if stream:
             stream: Stream[ChatCompletionChunk] = client.chat.completions.create(
@@ -89,12 +92,15 @@ def chat_completion_openai(
 
             message = ''
             num_tokens = None
+            prompt_tokens = None
             try:
                 for chunk in stream:
                     if chunk.choices and len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
                         message += chunk.choices[0].delta.content
                     if chunk.usage is not None:
                         num_tokens = chunk.usage.completion_tokens
+                        if hasattr(chunk.usage, 'prompt_tokens'):
+                            prompt_tokens = chunk.usage.prompt_tokens
                         if hasattr(chunk.usage, 'reasoning_tokens'):
                             num_tokens += chunk.usage.reasoning_tokens
             except Exception:
@@ -117,14 +123,22 @@ def chat_completion_openai(
                 message = response.choices[0]
             else:
                 message = response.choices[0].message.content
+
+            prompt_tokens = None
             if response.usage is not None:
                 num_tokens = response.usage.completion_tokens
+                if hasattr(response.usage, 'prompt_tokens'):
+                    prompt_tokens = response.usage.prompt_tokens
                 if hasattr(response.usage, 'completion_tokens_details') and hasattr(response.usage.completion_tokens_details, 'reasoning_tokens'):
                     reasoning_tokens = response.usage.completion_tokens_details.reasoning_tokens
                     if num_tokens is not None and reasoning_tokens is not None:
                         num_tokens += reasoning_tokens
             else:
                 num_tokens = None
+
+        # Calculate timing metrics
+        end_time = time.time()
+        inference_time = end_time - start_time
 
         if message is None or message == '':
             print(response)
@@ -138,6 +152,30 @@ def chat_completion_openai(
             metadata = {
                 'provider': response.provider
             }
+
+        # Add timing metrics to metadata
+        if metadata is None:
+            metadata = {}
+
+        metadata['inference_time_seconds'] = round(inference_time, 2)
+        if num_tokens > 0:
+            metadata['tokens_per_second'] = round(num_tokens / inference_time, 2)
+
+        # Add prompt tokens to metadata
+        if prompt_tokens is not None and prompt_tokens > 0:
+            metadata['prompt_tokens'] = prompt_tokens
+            metadata['total_tokens'] = prompt_tokens + (num_tokens if num_tokens > 0 else 0)
+
+        # Log metrics for local models (Ollama)
+        if api_dict is not None and 'api_base' in api_dict and 'localhost' in api_dict['api_base']:
+            metrics_str = f"[Ollama Metrics] Model: {model}"
+            if prompt_tokens is not None and prompt_tokens > 0:
+                metrics_str += f" | Input: {prompt_tokens} tok"
+            metrics_str += f" | Output: {num_tokens} tok"
+            if prompt_tokens is not None and prompt_tokens > 0:
+                metrics_str += f" | Total: {prompt_tokens + num_tokens} tok"
+            metrics_str += f" | Time: {inference_time:.2f}s | Speed: {num_tokens/inference_time:.2f} tok/s"
+            logger.info(metrics_str)
 
         return output, num_tokens, metadata
     except Exception as e:

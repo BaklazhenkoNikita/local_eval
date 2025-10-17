@@ -46,6 +46,7 @@ def get_answer(
     answer_file: str | None = None,
     model_display_name_override: str | None = None,
     model_provider_override: str | None = None,
+    metrics_accumulator: dict | None = None,
 
 ):
     """
@@ -72,8 +73,11 @@ def get_answer(
         temperature = 0
 
     metadata = {}
+    total_inference_time = 0.0
+    all_tokens_per_second = []
+    total_prompt_tokens = 0
+    total_tokens = 0
 
-    
     choices = []
     total_num_tokens = 0
     for i in range(num_choices):
@@ -107,6 +111,15 @@ def get_answer(
 
             if m is not None:
                 metadata.update(m)
+                # Accumulate timing metrics across turns
+                if 'inference_time_seconds' in m:
+                    total_inference_time += m['inference_time_seconds']
+                if 'tokens_per_second' in m:
+                    all_tokens_per_second.append(m['tokens_per_second'])
+                if 'prompt_tokens' in m:
+                    total_prompt_tokens += m['prompt_tokens']
+                if 'total_tokens' in m:
+                    total_tokens += m['total_tokens']
 
             messages.append({"role": "assistant", "content": output})
             turns.append(output)
@@ -130,10 +143,41 @@ def get_answer(
         }
     }
 
+    # Add aggregated timing metrics if available
+    if total_inference_time > 0:
+        ans["total_inference_time_seconds"] = round(total_inference_time, 2)
+    if all_tokens_per_second:
+        ans["average_tokens_per_second"] = round(sum(all_tokens_per_second) / len(all_tokens_per_second), 2)
+    if total_prompt_tokens > 0:
+        ans["total_prompt_tokens"] = total_prompt_tokens
+    if total_tokens > 0:
+        ans["total_tokens"] = total_tokens
+
     if answer_file is not None:
         os.makedirs(os.path.dirname(answer_file), exist_ok=True)
         with open(answer_file, "a") as fout:
             fout.write(json.dumps(ans) + "\n")
+
+    # Display metrics to console if available
+    if total_inference_time > 0:
+        metrics_display = "  ⏱️  "
+        if total_prompt_tokens > 0:
+            metrics_display += f"Input: {total_prompt_tokens} tok | "
+        metrics_display += f"Output: {total_num_tokens} tok"
+        if total_tokens > 0:
+            metrics_display += f" | Total: {total_tokens} tok"
+        metrics_display += f" | Time: {total_inference_time:.2f}s | Speed: {total_num_tokens/total_inference_time:.2f} tok/s"
+        print(metrics_display)
+
+    # Accumulate metrics for combined statistics
+    if metrics_accumulator is not None:
+        metrics_accumulator['total_questions'] += 1
+        metrics_accumulator['total_inference_time'] += total_inference_time
+        metrics_accumulator['total_prompt_tokens'] += total_prompt_tokens
+        metrics_accumulator['total_output_tokens'] += total_num_tokens
+        metrics_accumulator['total_all_tokens'] += total_tokens
+        if total_num_tokens > 0 and total_inference_time > 0:
+            metrics_accumulator['speeds'].append(total_num_tokens / total_inference_time)
 
 
 def setup_model(model_config: ModelConfig, api_dict: dict[str, str] | None = None, model_provider_override: str | None = None) -> tuple[str, APIKwargs | None, str, dict[str, str] | None]:
@@ -213,6 +257,16 @@ def run_questions(
 
     print('Model API name: ', model_api_name)
     print('Evaluating ', len(questions), ' questions in ', bench_name, ' with model ', model_config.display_name)
+
+    # Initialize metrics accumulator
+    metrics_accumulator = {
+        'total_questions': 0,
+        'total_inference_time': 0.0,
+        'total_prompt_tokens': 0,
+        'total_output_tokens': 0,
+        'total_all_tokens': 0,
+        'speeds': []
+    }
    
     if 'agentic_coding' in bench_name:
 
@@ -256,6 +310,7 @@ def run_questions(
                 model_display_name_override=model_display_name_override,
                 answer_file=answer_file,
                 model_config=model_config,
+                metrics_accumulator=metrics_accumulator,
             )
     else:
 
@@ -276,6 +331,7 @@ def run_questions(
                     model_display_name_override=model_display_name_override,
                     answer_file=answer_file,
                     model_config=model_config,
+                    metrics_accumulator=metrics_accumulator,
                 )
                 futures.append(future)
 
@@ -290,6 +346,23 @@ def run_questions(
                 reorg_answer_file(task_answer_file)
         elif answer_file is not None:
             reorg_answer_file(answer_file)
+
+        # Display combined metrics summary
+        if metrics_accumulator['total_questions'] > 0 and metrics_accumulator['total_inference_time'] > 0:
+            print("\n" + "="*80)
+            print("📊 COMBINED METRICS SUMMARY")
+            print("="*80)
+            print(f"Total Questions Processed: {metrics_accumulator['total_questions']}")
+            print(f"Total Input Tokens:        {metrics_accumulator['total_prompt_tokens']:,}")
+            print(f"Total Output Tokens:       {metrics_accumulator['total_output_tokens']:,}")
+            print(f"Total All Tokens:          {metrics_accumulator['total_all_tokens']:,}")
+            print(f"Total Inference Time:      {metrics_accumulator['total_inference_time']:.2f}s")
+            if metrics_accumulator['speeds']:
+                avg_speed = sum(metrics_accumulator['speeds']) / len(metrics_accumulator['speeds'])
+                print(f"Average Generation Speed:  {avg_speed:.2f} tok/s")
+            overall_speed = metrics_accumulator['total_output_tokens'] / metrics_accumulator['total_inference_time']
+            print(f"Overall Generation Speed:  {overall_speed:.2f} tok/s")
+            print("="*80 + "\n")
 
 
 if __name__ == "__main__":

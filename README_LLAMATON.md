@@ -14,8 +14,6 @@ Quick guide to evaluate LLMs locally using Ollama and simplified bash scripts.
 ### 1. Setup Environment
 
 ```bash
-# Install uv (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone and enter directory
 git clone https://github.com/BaklazhenkoNikita/local_eval.git
@@ -26,8 +24,6 @@ uv venv
 source .venv/bin/activate
 uv pip install -e .
 ```
-
-> **Why uv?** `uv` is 10-100x faster than `pip` for package installation and resolution. Perfect for quick setup!
 
 ### 2. Start Ollama
 
@@ -41,6 +37,10 @@ uv pip install -e .
 # Pull a model (if needed)
 ./start_ollama.sh pull qwen2.5:3b
 ./start_ollama.sh pull llama3.2:1b
+
+#Stop Ollama
+./kill_benchmarks.sh
+brew services stop ollama
 ```
 
 ### 3. Download Questions
@@ -55,7 +55,7 @@ cd ..
 
 ```bash
 # Basic usage: ./run_and_show_results.sh <model> <benchmark> [parallel]
-./run_and_show_results.sh qwen2.5:3b live_bench/reasoning/web_of_lies_v2 50
+./run_and_show_results.sh qwen2.5:3b live_bench/data_analysis/tablejoin 5
 ```
 
 ## Benchmark Examples
@@ -71,9 +71,6 @@ cd ..
 
 # Spatial Reasoning
 ./run_and_show_results.sh qwen2.5:3b live_bench/reasoning/spatial 5
-
-# House Traversal
-./run_and_show_results.sh qwen2.5:3b live_bench/reasoning/house_traversal 5
 ```
 
 ### Math Tasks
@@ -83,7 +80,7 @@ cd ..
 ./run_and_show_results.sh qwen2.5:3b live_bench/math/AMPS_Hard 5
 
 # Math Competitions
-./run_and_show_results.sh qwen2.5:3b live_bench/math/math_competitions 5
+./run_and_show_results.sh qwen2.5:3b live_bench/math/math_comp 5
 
 # Olympiad
 ./run_and_show_results.sh qwen2.5:3b live_bench/math/olympiad 5
@@ -92,14 +89,11 @@ cd ..
 ### Coding Tasks
 
 ```bash
-# Code Completion
-./run_and_show_results.sh qwen2.5:3b live_bench/coding/code_completion 3
+# Coding Completion
+./run_and_show_results.sh qwen2.5:3b live_bench/coding/coding_completion 3
 
-# Code Generation
-./run_and_show_results.sh qwen2.5:3b live_bench/coding/code_generation 3
-
-# LCB Code Generation
-./run_and_show_results.sh qwen2.5:3b live_bench/coding/lcb_code_generation 3
+# LCB Generation
+./run_and_show_results.sh qwen2.5:3b live_bench/coding/LCB_generation 3
 ```
 
 ### Data Analysis Tasks
@@ -118,39 +112,63 @@ cd ..
 ### Instruction Following
 
 ```bash
-# Instruction Following
-./run_and_show_results.sh qwen2.5:3b live_bench/instruction_following/instruction_following 5
+# Paraphrase
+./run_and_show_results.sh qwen2.5:3b live_bench/instruction_following/paraphrase 5
+
+# Simplify
+./run_and_show_results.sh qwen2.5:3b live_bench/instruction_following/simplify 5
+
+# Story Generation
+./run_and_show_results.sh qwen2.5:3b live_bench/instruction_following/story_generation 5
+
+# Summarize
+./run_and_show_results.sh qwen2.5:3b live_bench/instruction_following/summarize 5
 ```
 
-### Writing Tasks
+### Language Tasks
 
 ```bash
 # Typos
-./run_and_show_results.sh qwen2.5:3b live_bench/writing/typos 5
+./run_and_show_results.sh qwen2.5:3b live_bench/language/typos 5
 
 # Connections
-./run_and_show_results.sh qwen2.5:3b live_bench/writing/connections 5
+./run_and_show_results.sh qwen2.5:3b live_bench/language/connections 5
 
 # Plot Unscrambling
-./run_and_show_results.sh qwen2.5:3b live_bench/writing/plot_unscrambling 5
+./run_and_show_results.sh qwen2.5:3b live_bench/language/plot_unscrambling 5
 ```
 
 ## Running All Tasks
 
 ```bash
 # Run all reasoning tasks
-for task in web_of_lies_v2 web_of_lies_v3 zebra_puzzle spatial house_traversal; do
+for task in web_of_lies_v2 zebra_puzzle spatial; do
     ./run_and_show_results.sh qwen2.5:3b live_bench/reasoning/$task 5
 done
 
 # Run all math tasks
-for task in AMPS_Hard math_competitions olympiad; do
+for task in AMPS_Hard math_comp olympiad; do
     ./run_and_show_results.sh qwen2.5:3b live_bench/math/$task 5
+done
+
+# Run all coding tasks
+for task in coding_completion LCB_generation; do
+    ./run_and_show_results.sh qwen2.5:3b live_bench/coding/$task 3
 done
 
 # Run all data analysis tasks
 for task in cta tablejoin tablereformat; do
     ./run_and_show_results.sh qwen2.5:3b live_bench/data_analysis/$task 5
+done
+
+# Run all instruction following tasks
+for task in paraphrase simplify story_generation summarize; do
+    ./run_and_show_results.sh qwen2.5:3b live_bench/instruction_following/$task 5
+done
+
+# Run all language tasks
+for task in typos connections plot_unscrambling; do
+    ./run_and_show_results.sh qwen2.5:3b live_bench/language/$task 5
 done
 ```
 
@@ -173,10 +191,10 @@ done
 
 # Large models (slower, more accurate)
 ./start_ollama.sh pull qwen2.5:14b
-./run_and_show_results.sh qwen2.5:14b live_bench/coding/code_completion 1
+./run_and_show_results.sh qwen2.5:14b live_bench/coding/coding_completion 1
 
 ./start_ollama.sh pull llama3.1:8b
-./run_and_show_results.sh llama3.1:8b live_bench/coding/code_generation 1
+./run_and_show_results.sh llama3.1:8b live_bench/coding/LCB_generation 1
 ```
 
 ## Performance Tips
@@ -210,7 +228,7 @@ Adjust the parallel parameter based on your hardware:
 
 **Coding:** Larger models (7B+) or code-specialized models recommended
 ```bash
-./run_and_show_results.sh codellama:7b live_bench/coding/code_completion 2
+./run_and_show_results.sh codellama:7b live_bench/coding/coding_completion 2
 ```
 
 ## Ollama Management Commands
@@ -261,7 +279,6 @@ Pull the model:
 ### Slow evaluation
 - Increase parallel requests (if you have RAM)
 - Use smaller models for testing
-- Use GPU if available (Ollama automatically uses GPU)
 
 ## Results
 
@@ -298,10 +315,51 @@ Popular models for evaluation:
 
 See all models: https://ollama.ai/library
 
+## How Benchmarks Are Evaluated
+
+LiveBench uses deterministic evaluation methods for most categories:
+
+### Reasoning
+Extracts answers from `<solution>` tags or bold markdown (`**text**`), then compares to ground truth. Tasks include Web of Lies (yes/no/unknown matching), House Traversal (ordered name verification), Spatial (word-to-number conversion), and Zebra Puzzle (constraint satisfaction).
+
+**Scoring:** Binary (0 or 1)
+
+### Math
+- **Competitions (AMC/AIME):** Parses `\boxed{}` LaTeX or multiple-choice letters
+- **AMPS Hard:** Uses SymPy for symbolic equivalence checking, with LLM-as-judge fallback (OpenAI o3) when symbolic methods fail
+- **Olympiad:** Edit distance for proof rearrangement
+
+**Scoring:** Binary (0 or 1)
+
+### Coding
+Executes code against test cases with timeout/memory limits. Standard tasks use 20s timeout and 30MB limits. Agentic coding creates Docker environments and submits patches to real GitHub repos.
+
+**Scoring:** Binary - passes all tests or not
+
+### Data Analysis
+- **Table Reformat:** Parses outputs as DataFrames (JSON/CSV/TSV/markdown), compares element-by-element with 1e-6 tolerance for numerics
+- **CTA:** Normalizes and compares text strings
+- **Table Join:** Calculates F1-score: `(2*TP) / (2*TP + FP + FN)`
+
+**Scoring:** Binary for reformat/CTA; continuous (0-1) for table join
+
+### Instruction Following
+Checks each instruction using a registry of instruction classes. Computes two scores: (1) 1.0 if ALL followed, else 0.0, and (2) fraction of instructions followed. Final score is the average.
+
+**Scoring:** Continuous (0-1)
+
+### Writing
+- **Typos:** Substring matching in `<solution>` tags
+- **Plot Unscrambling:** Levenshtein distance on sentence orderings from `<PLOT_SUMMARY>` tags
+- **Connections:** Puzzle-specific logic
+
+**Scoring:** Binary for typos; continuous (0-1) for plot unscrambling
+
+**Main evaluator:** `livebench/gen_ground_truth_judgment.py` routes questions to appropriate evaluators and uses ThreadPoolExecutor for parallel processing.
+
 ## Support
 
 For issues with:
 - **Original LiveBench:** https://github.com/LiveBench/LiveBench
 - **This fork:** https://github.com/BaklazhenkoNikita/local_eval
 - **Ollama:** https://github.com/ollama/ollama
-
