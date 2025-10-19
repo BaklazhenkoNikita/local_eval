@@ -169,47 +169,6 @@ python3 run_and_show_results.py -m qwen2.5:3b -b live_bench/language/connections
 
 # Plot Unscrambling
 python3 run_and_show_results.py -m qwen2.5:3b -b live_bench/language/plot_unscrambling
-```
-
-## Running Multiple Benchmarks
-
-### Using Bash Loops
-
-```bash
-# Run all reasoning tasks
-for task in web_of_lies_v2 zebra_puzzle spatial; do
-    python3 run_and_show_results.py -m qwen2.5:3b -b live_bench/reasoning/$task
-done
-
-# Run all math tasks
-for task in AMPS_Hard math_comp olympiad; do
-    python3 run_and_show_results.py -m qwen2.5:3b -b live_bench/math/$task
-done
-
-# Run all custom tests
-python3 run_and_show_results.py -m qwen2.5:3b -b custom_tests/basic_math
-python3 run_and_show_results.py -m qwen2.5:3b -b custom_tests/translation
-
-# Run all coding tasks
-for task in coding_completion LCB_generation; do
-    python3 run_and_show_results.py -m qwen2.5:3b -b live_bench/coding/$task
-done
-
-# Run all data analysis tasks
-for task in cta tablejoin tablereformat; do
-    python3 run_and_show_results.py -m qwen2.5:3b -b live_bench/data_analysis/$task
-done
-
-# Run all instruction following tasks
-for task in paraphrase simplify story_generation summarize; do
-    python3 run_and_show_results.py -m qwen2.5:3b -b live_bench/instruction_following/$task
-done
-
-# Run all language tasks
-for task in typos connections plot_unscrambling; do
-    python3 run_and_show_results.py -m qwen2.5:3b -b live_bench/language/$task
-done
-```
 
 ### Using VS Code Tasks
 
@@ -217,31 +176,6 @@ For running category groups:
 1. Press `Cmd+Shift+P` → "Tasks: Run Task"
 2. Select "LiveBench: Run Benchmark Group"
 3. Choose model and category (e.g., `live_bench/reasoning` to run all reasoning tests)
-
-## Testing Different Models
-
-```bash
-# Small models (faster)
-ollama pull llama3.2:1b
-python3 run_and_show_results.py -m llama3.2:1b -b live_bench/reasoning/web_of_lies_v2
-
-ollama pull qwen2.5:3b
-python3 run_and_show_results.py -m qwen2.5:3b -b live_bench/reasoning/web_of_lies_v2
-
-# Medium models
-ollama pull llama3.2:3b
-python3 run_and_show_results.py -m llama3.2:3b -b live_bench/math/AMPS_Hard
-
-ollama pull qwen2.5:7b
-python3 run_and_show_results.py -m qwen2.5:7b -b live_bench/math/AMPS_Hard
-
-# Large models (slower, more accurate)
-ollama pull qwen2.5:14b
-python3 run_and_show_results.py -m qwen2.5:14b -b live_bench/coding/coding_completion
-
-ollama pull llama3.1:8b
-python3 run_and_show_results.py -m llama3.1:8b -b live_bench/coding/LCB_generation
-```
 
 ## Performance Tips
 
