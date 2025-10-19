@@ -14,7 +14,7 @@ dist
 !playground/deepspeed_config_s2.json
 !playground/deepspeed_config_s3.json
 *.jsonl
-!data/custom_tests/**/*.jsonl
+!data/custom_tests/**/question.jsonl
 
 # Editor
 .idea
@@ -38,6 +38,9 @@ build
 
 data
 !data/custom_tests/
+# Exclude model results but keep question files
+data/custom_tests/**/model_answer/
+data/custom_tests/**/model_judgment/
 
 core
 

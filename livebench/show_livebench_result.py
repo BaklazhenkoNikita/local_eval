@@ -219,46 +219,124 @@ def calculate_usage(args, df, questions_all):
     task_pivot.to_csv('task_usage.csv')
     category_pivot.to_csv('group_usage.csv')
     
-    # Print results
-    print("\n########## Token Usage by Task ##########")
-    with pd.option_context('display.max_rows', None):
-        print(task_pivot.sort_index())
+    # Build combined metrics table by task
+    print("\n########## Performance Metrics by Task ##########")
 
-    print("\n########## Token Usage by Category ##########")
-    with pd.option_context('display.max_rows', None):
-        print(category_pivot)
+    # Calculate accuracy scores by task
+    score_task = df.groupby(["model", "task"])["score"].mean().reset_index()
+    score_task_pivot = pd.pivot_table(score_task, index=['model'], values="score", columns=["task"])
 
-    # Calculate and display timing metrics if available
-    if "inference_time" in usage_df.columns:
-        print("\n########## Inference Time (seconds) by Task ##########")
-        time_task = usage_df.groupby(["model", "task"])["inference_time"].mean().reset_index()
-        time_task_pivot = pd.pivot_table(time_task, index=['model'], values="inference_time", columns=["task"])
-        time_task_pivot = time_task_pivot.round(2)
-        with pd.option_context('display.max_rows', None):
-            print(time_task_pivot.sort_index())
+    # Collect all metrics for each task
+    all_tasks = sorted(task_pivot.columns.tolist())
+    combined_data = {}
 
-        print("\n########## Inference Time (seconds) by Category ##########")
-        time_category = usage_df.groupby(["model", "category"])["inference_time"].mean().reset_index()
-        time_category_pivot = pd.pivot_table(time_category, index=['model'], values="inference_time", columns=["category"])
-        time_category_pivot = time_category_pivot.round(2)
-        with pd.option_context('display.max_rows', None):
-            print(time_category_pivot)
+    for task in all_tasks:
+        # Add accuracy score first
+        if task in score_task_pivot.columns:
+            combined_data[(task, 'Score')] = score_task_pivot[task].round(1)
 
-    # Calculate and display tokens per second if available
-    if "tokens_per_second" in usage_df.columns:
-        print("\n########## Tokens Per Second by Task ##########")
-        tps_task = usage_df.groupby(["model", "task"])["tokens_per_second"].mean().reset_index()
-        tps_task_pivot = pd.pivot_table(tps_task, index=['model'], values="tokens_per_second", columns=["task"])
-        tps_task_pivot = tps_task_pivot.round(2)
-        with pd.option_context('display.max_rows', None):
-            print(tps_task_pivot.sort_index())
+        combined_data[(task, 'Tokens')] = task_pivot[task].round(1)
 
-        print("\n########## Tokens Per Second by Category ##########")
-        tps_category = usage_df.groupby(["model", "category"])["tokens_per_second"].mean().reset_index()
-        tps_category_pivot = pd.pivot_table(tps_category, index=['model'], values="tokens_per_second", columns=["category"])
-        tps_category_pivot = tps_category_pivot.round(2)
-        with pd.option_context('display.max_rows', None):
-            print(tps_category_pivot)
+        if "inference_time" in usage_df.columns:
+            time_task = usage_df.groupby(["model", "task"])["inference_time"].mean().reset_index()
+            time_task_pivot = pd.pivot_table(time_task, index=['model'], values="inference_time", columns=["task"])
+            if task in time_task_pivot.columns:
+                combined_data[(task, 'Time (s)')] = time_task_pivot[task].round(2)
+
+        if "tokens_per_second" in usage_df.columns:
+            tps_task = usage_df.groupby(["model", "task"])["tokens_per_second"].mean().reset_index()
+            tps_task_pivot = pd.pivot_table(tps_task, index=['model'], values="tokens_per_second", columns=["task"])
+            if task in tps_task_pivot.columns:
+                combined_data[(task, 'Tok/s')] = tps_task_pivot[task].round(2)
+
+    combined_task = pd.DataFrame(combined_data)
+    combined_task.columns = pd.MultiIndex.from_tuples(combined_task.columns, names=['Task', 'Metric'])
+
+    with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None):
+        print(combined_task)
+
+    # Calculate and display benchmark summary statistics
+    print("\n########## Benchmark Summary ##########")
+
+    summary_data = {}
+
+    # Load all model answer files fresh to get complete timing data
+    for bench in args.bench_name:
+        answer_files = glob.glob(f"data/{bench}/**/model_answer/*.jsonl", recursive=True)
+
+        for answer_file in answer_files:
+            if os.path.exists(answer_file):
+                answers = pd.read_json(answer_file, lines=True)
+
+                if len(answers) == 0 or 'model_id' not in answers.columns:
+                    continue
+
+                # Filter to only include valid question IDs
+                answers = answers[answers['question_id'].isin(valid_question_ids)]
+
+                if len(answers) == 0:
+                    continue
+
+                model_id = answers['model_id'].iloc[0]
+
+                # Skip if we're filtering by model list and this model isn't in it
+                if model_filter is not None and model_id.lower() not in model_filter:
+                    continue
+
+                # Find matching model name from df
+                matching_models = [m for m in set(df["model"]) if isinstance(m, str) and m.lower() == model_id.lower()]
+
+                for model in matching_models:
+                    if model in summary_data:
+                        continue  # Already processed this model
+
+                    model_summary = {}
+
+                    # Total tokens across all questions
+                    if 'total_output_tokens' in answers.columns:
+                        valid_tokens = answers[answers['total_output_tokens'] != -1]['total_output_tokens']
+                        if len(valid_tokens) > 0:
+                            total_tokens = valid_tokens.sum()
+                            model_summary['Total Tokens'] = int(total_tokens)
+
+                    # Total time across all questions
+                    total_time = None
+                    if 'total_inference_time_seconds' in answers.columns:
+                        valid_times = answers[pd.notna(answers['total_inference_time_seconds'])]['total_inference_time_seconds']
+                        if len(valid_times) > 0:
+                            total_time = valid_times.sum()
+
+                    # If no inference time available, estimate from timestamps
+                    if total_time is None and 'tstamp' in answers.columns:
+                        timestamps = answers['tstamp'].dropna()
+                        if len(timestamps) > 1:
+                            # Calculate total time as difference between earliest and latest timestamp
+                            total_time = timestamps.max() - timestamps.min()
+
+                    if total_time is not None and total_time > 0:
+                        model_summary['Total Time (s)'] = round(total_time, 2)
+
+                        # Calculate overall average tok/s = total_tokens / total_time
+                        if 'Total Tokens' in model_summary:
+                            avg_toks = model_summary['Total Tokens'] / total_time
+                            model_summary['Avg Tok/s'] = round(avg_toks, 2)
+
+                    # Number of questions answered
+                    model_summary['Questions'] = len(answers)
+
+                    if model_summary:
+                        summary_data[model] = model_summary
+
+    if summary_data:
+        summary_df = pd.DataFrame(summary_data).T
+
+        # Reorder columns for better readability
+        col_order = ['Questions', 'Total Tokens', 'Total Time (s)', 'Avg Tok/s']
+        available_cols = [col for col in col_order if col in summary_df.columns]
+        summary_df = summary_df[available_cols]
+
+        with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+            print(summary_df)
 
 
 def display_result_single(args):
@@ -362,54 +440,33 @@ def display_result_single(args):
 
     df.to_csv('df_raw.csv')
 
-    print("\n########## All Tasks ##########")
-    df_1 = df[["model", "score", "task"]]
-    df_1 = df_1.groupby(["model", "task"]).mean()
-    df_1 = pd.pivot_table(df_1, index=['model'], values = "score", columns=["task"], aggfunc="sum")
-    if args.show_average_row:
-        df_1.loc['average'] = df_1.mean()
-    df_1 = df_1.round(3)
-    df_1 = df_1.dropna(inplace=False)
-    with pd.option_context('display.max_rows', None):
-        print(df_1.sort_values(by="model"))
-    df_1.to_csv('all_tasks.csv')
+    # Always try to show usage information if available (includes scores, tokens, timing)
+    calculate_usage(args, df, questions_all)
+
+    # Save separate CSV files for backwards compatibility
+    df_tasks = df[["model", "score", "task"]].groupby(["model", "task"]).mean()
+    df_tasks = pd.pivot_table(df_tasks, index=['model'], values="score", columns=["task"], aggfunc="sum")
+    df_tasks = df_tasks.round(3).dropna(inplace=False)
+    df_tasks.to_csv('all_tasks.csv')
 
     if not args.prompt_testing:
-        print("\n########## All Groups ##########")
-        df_1 = df[["model", "score", "category", "task"]]
-        df_1 = df_1.groupby(["model", "task", "category"]).mean().groupby(["model","category"]).mean()
-        df_1 = pd.pivot_table(df_1, index=['model'], values = "score", columns=["category"], aggfunc="sum")
+        df_groups = df[["model", "score", "category", "task"]].groupby(["model", "task", "category"]).mean().groupby(["model","category"]).mean()
+        df_groups = pd.pivot_table(df_groups, index=['model'], values="score", columns=["category"], aggfunc="sum")
+        df_groups = df_groups.dropna(inplace=False)
 
-        df_1 = df_1.dropna(inplace=False)
+        if not args.skip_average_column and len(df_groups.columns) > 1:
+            df_groups['average'] = df_groups.mean(axis=1)
+            first_col = df_groups.pop('average')
+            df_groups.insert(0, 'average', first_col)
+            df_groups = df_groups.sort_values(by="average", ascending=False)
 
-        # Only show average column if there are multiple data columns and not explicitly skipped
-        if not args.skip_average_column and len(df_1.columns) > 1:
-            df_1['average'] = df_1.mean(axis=1)
-            first_col = df_1.pop('average')
-            df_1.insert(0, 'average', first_col)
-            sort_by = "average"
-        else:
-            sort_by = df_1.columns[0] if len(df_1.columns) > 0 else None
+        df_groups = df_groups.round(1)
+        df_groups.to_csv('all_groups.csv')
 
-        # Sort if we have a column to sort by
-        if sort_by is not None:
-            df_1 = df_1.sort_values(by=sort_by, ascending=False)
-
-        df_1 = df_1.round(1)
-        if args.show_average_row:
-            df_1.loc['average'] = df_1.mean()
-        with pd.option_context('display.max_rows', None):
-            print(df_1)
-        df_1.to_csv('all_groups.csv')
-
-
-        for column in df_1.columns[1:]:
-            max_value = df_1[column].max()
-            df_1[column] = df_1[column].apply(lambda x: f'\\textbf{{{x}}}' if x == max_value else x)
-        df_1.to_csv('latex_table.csv', sep='&', lineterminator='\\\\\n', quoting=3,escapechar=" ")
-    
-    if args.print_usage:
-        calculate_usage(args, df, questions_all)
+        for column in df_groups.columns[1:]:
+            max_value = df_groups[column].max()
+            df_groups[column] = df_groups[column].apply(lambda x: f'\\textbf{{{x}}}' if x == max_value else x)
+        df_groups.to_csv('latex_table.csv', sep='&', lineterminator='\\\\\n', quoting=3,escapechar=" ")
 
 
 if __name__ == "__main__":
