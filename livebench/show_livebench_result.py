@@ -19,8 +19,8 @@ from livebench.model import get_model_config
 
 
 def calculate_usage(args, df, questions_all):
-    """Calculate average token usage for all answers by task and category."""
-    print("Calculating token usage for all answers...")
+    """Calculate average token usage and timing metrics for all answers by task and category."""
+    print("\nCalculating token usage and performance metrics...")
     
     # Get the set of valid question IDs
     valid_question_ids = {q['question_id'] for q in questions_all}
@@ -105,13 +105,23 @@ def calculate_usage(args, df, questions_all):
                 continue
                 
             # Add to usage data
-            usage_data.append({
+            answer_row = matching_answer.iloc[0]
+            usage_entry = {
                 "model": model,
                 "question_id": question_id,
                 "task": judgment["task"],
                 "category": judgment["category"],
-                "total_output_tokens": matching_answer.iloc[0]["total_output_tokens"]
-            })
+                "total_output_tokens": answer_row["total_output_tokens"]
+            }
+
+            # Add timing information if available
+            if "total_inference_time_seconds" in answer_row and pd.notna(answer_row["total_inference_time_seconds"]):
+                usage_entry["inference_time"] = answer_row["total_inference_time_seconds"]
+
+            if "average_tokens_per_second" in answer_row and pd.notna(answer_row["average_tokens_per_second"]):
+                usage_entry["tokens_per_second"] = answer_row["average_tokens_per_second"]
+
+            usage_data.append(usage_entry)
     
     if not usage_data:
         print("No token usage data found.")
@@ -213,10 +223,42 @@ def calculate_usage(args, df, questions_all):
     print("\n########## Token Usage by Task ##########")
     with pd.option_context('display.max_rows', None):
         print(task_pivot.sort_index())
-        
+
     print("\n########## Token Usage by Category ##########")
     with pd.option_context('display.max_rows', None):
         print(category_pivot)
+
+    # Calculate and display timing metrics if available
+    if "inference_time" in usage_df.columns:
+        print("\n########## Inference Time (seconds) by Task ##########")
+        time_task = usage_df.groupby(["model", "task"])["inference_time"].mean().reset_index()
+        time_task_pivot = pd.pivot_table(time_task, index=['model'], values="inference_time", columns=["task"])
+        time_task_pivot = time_task_pivot.round(2)
+        with pd.option_context('display.max_rows', None):
+            print(time_task_pivot.sort_index())
+
+        print("\n########## Inference Time (seconds) by Category ##########")
+        time_category = usage_df.groupby(["model", "category"])["inference_time"].mean().reset_index()
+        time_category_pivot = pd.pivot_table(time_category, index=['model'], values="inference_time", columns=["category"])
+        time_category_pivot = time_category_pivot.round(2)
+        with pd.option_context('display.max_rows', None):
+            print(time_category_pivot)
+
+    # Calculate and display tokens per second if available
+    if "tokens_per_second" in usage_df.columns:
+        print("\n########## Tokens Per Second by Task ##########")
+        tps_task = usage_df.groupby(["model", "task"])["tokens_per_second"].mean().reset_index()
+        tps_task_pivot = pd.pivot_table(tps_task, index=['model'], values="tokens_per_second", columns=["task"])
+        tps_task_pivot = tps_task_pivot.round(2)
+        with pd.option_context('display.max_rows', None):
+            print(tps_task_pivot.sort_index())
+
+        print("\n########## Tokens Per Second by Category ##########")
+        tps_category = usage_df.groupby(["model", "category"])["tokens_per_second"].mean().reset_index()
+        tps_category_pivot = pd.pivot_table(tps_category, index=['model'], values="tokens_per_second", columns=["category"])
+        tps_category_pivot = tps_category_pivot.round(2)
+        with pd.option_context('display.max_rows', None):
+            print(tps_category_pivot)
 
 
 def display_result_single(args):

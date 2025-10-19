@@ -27,6 +27,7 @@ from livebench.process_results.math.math_competitions.utils import mathcontest_p
 from livebench.process_results.math.olympiad.utils import proof_rearrangement_process_results
 from livebench.process_results.math.AMPS_Hard.utils import amps_hard_process_results
 from livebench.process_results.custom_tests.basic_math.utils import basic_math_process_results
+from livebench.process_results.custom_tests.advanced_math.utils import advanced_math_process_results
 from livebench.process_results.custom_tests.translation.utils import translation_process_results
 from livebench.process_results.writing.plot_unscrambling.utils import plot_unscrambling_process_results
 from livebench.process_results.writing.typos.utils import typos_process_results
@@ -131,6 +132,9 @@ def play_a_match_gt(match: MatchSingle, output_file: str | None = None, debug=Fa
             category = "math"
         elif task_or_subtask == "basic_math" or task in ["basic_math"]:
             score = basic_math_process_results(ground_truth, llm_answer, debug)
+            category = "custom_tests"
+        elif task_or_subtask == "advanced_math" or task in ["advanced_math"]:
+            score = advanced_math_process_results(ground_truth, llm_answer, debug)
             category = "custom_tests"
         elif task_or_subtask == "translation" or task in ["translation"] or "to_english" in task_or_subtask:
             score = translation_process_results(ground_truth, llm_answer, debug)

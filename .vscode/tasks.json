@@ -58,7 +58,7 @@
                 "--benchmark",
                 "${input:mainCategory}",
                 "--parallel",
-                "15",
+                "25",
                 "--api"
             ],
             "problemMatcher": [],
@@ -80,7 +80,7 @@
                 "--benchmark",
                 "${input:specificTest}",
                 "--parallel",
-                "4",
+                "25",
                 "--api"
             ],
             "problemMatcher": [],
@@ -90,7 +90,31 @@
                 "focus": true,
                 "panel": "shared"
             }
-        }
+        },
+        {
+            "label": "LiveBench: Show Results",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/python3",
+            "args": [
+                "show_livebench_result.py",
+                "--bench-name",
+                "${input:specificTest}",
+                "--question-source",
+                "jsonl",
+                "--livebench-release-option",
+                "2024-11-25"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/livebench"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        },
     ],
     "inputs": [
         {
@@ -131,6 +155,7 @@
             "options": [
                 "custom_tests",
                 "custom_tests/basic_math",
+                "custom_tests/advanced_math",
                 "custom_tests/translation",
                 "live_bench/reasoning",
                 "live_bench/math",
@@ -147,6 +172,7 @@
             "description": "Select specific test to run",
             "options": [
                 "custom_tests/basic_math",
+                "custom_tests/advanced_math",
                 "custom_tests/translation",
                 "live_bench/reasoning/web_of_lies_v2",
                 "live_bench/reasoning/zebra_puzzle",
@@ -168,6 +194,23 @@
                 "live_bench/language/plot_unscrambling"
             ],
             "default": "custom_tests/basic_math"
+        },
+        {
+            "id": "allModels",
+            "type": "pickString",
+            "description": "Select model to show results for",
+            "options": [
+                "qwen2.5:3b",
+                "llama3:latest",
+                "llama2",
+                "gpt-oss:latest",
+                "gpt-5-mini",
+                "gpt-5",
+                "gpt-5-nano",
+                "gemini-2.5-flash-06-05-nothinking",
+                "gemini-2.5-flash-06-05-highthinking"
+            ],
+            "default": "qwen2.5:3b"
         }
     ]
 }
