@@ -219,42 +219,6 @@ def calculate_usage(args, df, questions_all):
     task_pivot.to_csv('task_usage.csv')
     category_pivot.to_csv('group_usage.csv')
     
-    # Build combined metrics table by task
-    print("\n########## Performance Metrics by Task ##########")
-
-    # Calculate accuracy scores by task
-    score_task = df.groupby(["model", "task"])["score"].mean().reset_index()
-    score_task_pivot = pd.pivot_table(score_task, index=['model'], values="score", columns=["task"])
-
-    # Collect all metrics for each task
-    all_tasks = sorted(task_pivot.columns.tolist())
-    combined_data = {}
-
-    for task in all_tasks:
-        # Add accuracy score first
-        if task in score_task_pivot.columns:
-            combined_data[(task, 'Score')] = score_task_pivot[task].round(1)
-
-        combined_data[(task, 'Tokens')] = task_pivot[task].round(1)
-
-        if "inference_time" in usage_df.columns:
-            time_task = usage_df.groupby(["model", "task"])["inference_time"].mean().reset_index()
-            time_task_pivot = pd.pivot_table(time_task, index=['model'], values="inference_time", columns=["task"])
-            if task in time_task_pivot.columns:
-                combined_data[(task, 'Time (s)')] = time_task_pivot[task].round(2)
-
-        if "tokens_per_second" in usage_df.columns:
-            tps_task = usage_df.groupby(["model", "task"])["tokens_per_second"].mean().reset_index()
-            tps_task_pivot = pd.pivot_table(tps_task, index=['model'], values="tokens_per_second", columns=["task"])
-            if task in tps_task_pivot.columns:
-                combined_data[(task, 'Tok/s')] = tps_task_pivot[task].round(2)
-
-    combined_task = pd.DataFrame(combined_data)
-    combined_task.columns = pd.MultiIndex.from_tuples(combined_task.columns, names=['Task', 'Metric'])
-
-    with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', None):
-        print(combined_task)
-
     # Calculate and display benchmark summary statistics
     print("\n########## Benchmark Summary ##########")
 
@@ -292,6 +256,15 @@ def calculate_usage(args, df, questions_all):
 
                     model_summary = {}
 
+                    # Get score for this model
+                    model_scores = df[df["model"] == model]["score"]
+                    if len(model_scores) > 0:
+                        avg_score = model_scores.mean()
+                        model_summary['Score'] = round(avg_score, 1)
+
+                    # Number of questions answered
+                    model_summary['Questions'] = len(answers)
+
                     # Total tokens across all questions
                     if 'total_output_tokens' in answers.columns:
                         valid_tokens = answers[answers['total_output_tokens'] != -1]['total_output_tokens']
@@ -321,9 +294,6 @@ def calculate_usage(args, df, questions_all):
                             avg_toks = model_summary['Total Tokens'] / total_time
                             model_summary['Avg Tok/s'] = round(avg_toks, 2)
 
-                    # Number of questions answered
-                    model_summary['Questions'] = len(answers)
-
                     if model_summary:
                         summary_data[model] = model_summary
 
@@ -331,7 +301,7 @@ def calculate_usage(args, df, questions_all):
         summary_df = pd.DataFrame(summary_data).T
 
         # Reorder columns for better readability
-        col_order = ['Questions', 'Total Tokens', 'Total Time (s)', 'Avg Tok/s']
+        col_order = ['Score', 'Questions', 'Total Tokens', 'Total Time (s)', 'Avg Tok/s']
         available_cols = [col for col in col_order if col in summary_df.columns]
         summary_df = summary_df[available_cols]
 

@@ -79,6 +79,23 @@ Available tasks:
 
 ## Benchmark Examples
 
+### Custom Tests
+
+```bash
+# Basic Math (binary scoring - addition, subtraction, multiplication, division, fractions, percentages, powers)
+python3 run_and_show_results.py -m qwen2.5:3b -b custom_tests/basic_math
+
+# Advanced Math (algebra, calculus, geometry, etc.)
+python3 run_and_show_results.py -m qwen2.5:3b -b custom_tests/advanced_math
+
+# Translation (continuous scoring - Spanish/French/German to English translation)
+python3 run_and_show_results.py -m qwen2.5:3b -b custom_tests/translation
+
+# You can create your own custom tests in livebench/data/custom_tests/
+# See livebench/data/custom_tests/basic_math/ for binary scoring example
+# See livebench/data/custom_tests/translation/ for continuous scoring example
+```
+
 ### Reasoning Tasks
 
 ```bash
@@ -103,20 +120,6 @@ python3 run_and_show_results.py -m qwen2.5:3b -b live_bench/math/math_comp
 
 # Olympiad
 python3 run_and_show_results.py -m qwen2.5:3b -b live_bench/math/olympiad
-```
-
-### Custom Tests
-
-```bash
-# Basic Math (binary scoring - addition, subtraction, multiplication, division, fractions, percentages, powers)
-python3 run_and_show_results.py -m qwen2.5:3b -b custom_tests/basic_math
-
-# Translation (continuous scoring - Spanish/French/German to English translation)
-python3 run_and_show_results.py -m qwen2.5:3b -b custom_tests/translation
-
-# You can create your own custom tests in livebench/data/custom_tests/
-# See livebench/data/custom_tests/basic_math/ for binary scoring example
-# See livebench/data/custom_tests/translation/ for continuous scoring example
 ```
 
 ### Coding Tasks
@@ -199,14 +202,31 @@ livebench/data/<benchmark>/model_answer/<model>.jsonl
 livebench/data/<benchmark>/model_judgment/<model>.jsonl
 ```
 
-To view results separately:
+### View Results
+
+**Using VS Code Tasks (Recommended):**
+
+Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux), type "Run Task", and select:
+- **LiveBench: Show Results** - View comprehensive performance metrics for all models
+
+**Using Command Line:**
 ```bash
 cd livebench
 python3 show_livebench_result.py \
-    --bench-name live_bench/reasoning/web_of_lies_v2 \
-    --model-list qwen2.5:3b \
+    --bench-name custom_tests/basic_math \
     --question-source jsonl \
     --livebench-release-option 2024-11-25
+```
+
+The results display benchmark summary with comprehensive metrics:
+
+Example output for **custom_tests/basic_math**:
+```
+########## Benchmark Summary ##########
+               Score  Questions  Total Tokens  Total Time (s)  Avg Tok/s
+qwen2.5:3b      96.0       25.0        4658.0          232.84      20.01
+gpt-5-mini     100.0       25.0        2451.0           16.64     147.25
+gpt-5          100.0       25.0        2370.0           15.12     156.70
 ```
 
 ## Script Reference
@@ -239,39 +259,39 @@ Popular models for evaluation:
 
 **Ollama Models (Local)**
 
-| Model | Size | Best For | Command |
-|-------|------|----------|---------|
-| qwen2.5:0.5b | 0.5GB | Quick tests | `ollama pull qwen2.5:0.5b` |
-| llama3.2:1b | 1.3GB | Fast evaluation | `ollama pull llama3.2:1b` |
-| gemma2:2b | 1.6GB | Fast & accurate | `ollama pull gemma2:2b` |
-| qwen2.5:3b | 1.9GB | Balanced tasks | `ollama pull qwen2.5:3b` |
-| qwen2.5-coder:7b | 4.7GB | Code generation | `ollama pull qwen2.5-coder:7b` |
-| deepseek-r1:7b | 4.7GB | Reasoning & coding | `ollama pull deepseek-r1:7b` |
-| llama3.1:8b | 4.7GB | General chat | `ollama pull llama3.1:8b` |
-| mistral-small3 | 8.0GB | Multilingual & chat | `ollama pull mistral-small3` |
-| gemma2:9b | 5.4GB | Balanced performance | `ollama pull gemma2:9b` |
-| deepseek-r1:14b | 9.0GB | Advanced reasoning | `ollama pull deepseek-r1:14b` |
-| qwen2.5:14b | 9.0GB | Best medium model | `ollama pull qwen2.5:14b` |
-| gpt-oss:20b | 16GB | OpenAI reasoning | `ollama pull gpt-oss:20b` |
-| qwen2.5:32b | 19GB | Advanced tasks | `ollama pull qwen2.5:32b` |
-| llama3.3:70b | 43GB | Top local model | `ollama pull llama3.3:70b` |
-| gpt-oss:120b | 80GB | Top OpenAI model | `ollama pull gpt-oss:120b` |
+| Model | Approx Size |
+|-------|-------------|
+| qwen2.5:0.5b | ~0.5GB |
+| llama3.2:1b | ~1GB |
+| gemma2:2b | ~2GB |
+| qwen2.5:3b | ~2GB |
+| qwen2.5-coder:7b | ~5GB |
+| deepseek-r1:7b | ~5GB |
+| llama3.1:8b | ~5GB |
+| mistral-small3 | ~8GB |
+| gemma2:9b | ~5GB |
+| deepseek-r1:14b | ~9GB |
+| qwen2.5:14b | ~9GB |
+| gpt-oss:20b | ~16GB |
+| qwen2.5:32b | ~19GB |
+| llama3.3:70b | ~43GB |
+| gpt-oss:120b | ~80GB |
 
 See all models: https://ollama.ai/library
 
 **API-Based Models (Requires API Key)**
 
-| Provider | Model | Best For | Setup |
-|----------|-------|----------|-------|
-| OpenAI | gpt-4o (2024-11-20) | Multi-modal tasks | Set `OPENAI_API_KEY` |
-| OpenAI | o1 (2024-12-17) | Complex reasoning | Set `OPENAI_API_KEY` |
-| OpenAI | o3-mini | Fast reasoning | Set `OPENAI_API_KEY` |
-| Anthropic | claude-3-5-sonnet-20241022 | Top performance | Set `ANTHROPIC_API_KEY` |
-| Anthropic | claude-3-7-sonnet | Latest flagship | Set `ANTHROPIC_API_KEY` |
-| Google | gemini-2.0-flash-exp | Fast & multimodal | Set `GOOGLE_API_KEY` |
-| Google | gemini-exp-1206 | Experimental best | Set `GOOGLE_API_KEY` |
-| DeepSeek | deepseek-chat | Cost-effective | Set `DEEPSEEK_API_KEY` |
-| DeepSeek | deepseek-reasoner | Reasoning tasks | Set `DEEPSEEK_API_KEY` |
+Available models in tasks:
+- `gpt-5-mini`, `gpt-5`, `gpt-5-nano`
+- `gemini-2.5-flash-06-05-nothinking`, `gemini-2.5-flash-06-05-highthinking`
+
+**To use other models:** Check the config files for full model lists:
+- OpenAI: `livebench/model/model_configs/openai.yml`
+- Google: `livebench/model/model_configs/google.yml`
+
+Set the appropriate API key environment variable for your chosen provider:
+- OpenAI: `OPENAI_API_KEY`
+- Google: `GEMINI_API_KEY`
 
 
 ## How Benchmarks Are Evaluated

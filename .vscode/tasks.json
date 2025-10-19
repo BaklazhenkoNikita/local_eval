@@ -124,7 +124,6 @@
             "options": [
                 "qwen2.5:3b",
                 "llama3:latest",
-                "llama2",
                 "gpt-oss:latest"
             ],
             "default": "qwen2.5:3b"
@@ -202,7 +201,6 @@
             "options": [
                 "qwen2.5:3b",
                 "llama3:latest",
-                "llama2",
                 "gpt-oss:latest",
                 "gpt-5-mini",
                 "gpt-5",
