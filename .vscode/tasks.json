@@ -2,13 +2,13 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "LiveBench: Run Benchmark Group",
+            "label": "LiveBench: Run Benchmark Group (Local)",
             "type": "shell",
             "command": "${workspaceFolder}/.venv/bin/python3",
             "args": [
                 "run_and_show_results.py",
                 "--model",
-                "${input:model}",
+                "${input:localModel}",
                 "--benchmark",
                 "${input:mainCategory}",
                 "--parallel",
@@ -27,13 +27,13 @@
             }
         },
         {
-            "label": "LiveBench: Run Specific Benchmark",
+            "label": "LiveBench: Run Specific Benchmark (Local)",
             "type": "shell",
             "command": "${workspaceFolder}/.venv/bin/python3",
             "args": [
                 "run_and_show_results.py",
                 "--model",
-                "${input:model}",
+                "${input:localModel}",
                 "--benchmark",
                 "${input:specificTest}",
                 "--parallel",
@@ -46,26 +46,77 @@
                 "focus": true,
                 "panel": "shared"
             }
+        },
+        {
+            "label": "LiveBench: Run Benchmark Group (API)",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/python3",
+            "args": [
+                "run_and_show_results.py",
+                "--model",
+                "${input:apiModel}",
+                "--benchmark",
+                "${input:mainCategory}",
+                "--parallel",
+                "15",
+                "--api"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "LiveBench: Run Specific Benchmark (API)",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/python3",
+            "args": [
+                "run_and_show_results.py",
+                "--model",
+                "${input:apiModel}",
+                "--benchmark",
+                "${input:specificTest}",
+                "--parallel",
+                "4",
+                "--api"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
         }
     ],
     "inputs": [
         {
-            "id": "model",
+            "id": "localModel",
             "type": "pickString",
-            "description": "Select or enter model name",
+            "description": "Select local Ollama model",
             "options": [
                 "qwen2.5:3b",
                 "llama3:latest",
-                "gpt-oss:latest",
-                "qwen2.5:0.5b",
-                "llama3.2:1b",
-                "gemma2:2b",
-                "qwen2.5-coder:7b",
-                "deepseek-r1:7b",
-                "llama3.1:8b",
-                "qwen2.5:14b"
+                "llama2",
+                "gpt-oss:latest"
             ],
             "default": "qwen2.5:3b"
+        },
+        {
+            "id": "apiModel",
+            "type": "pickString",
+            "description": "Select API model (OpenAI or Gemini)",
+            "options": [
+                "gpt-5-mini",
+                "gpt-5",
+                "gpt-5-nano",
+                "gemini-2.5-flash-06-05-nothinking",
+                "gemini-2.5-flash-06-05-highthinking"
+            ],
+            "default": "gpt-4o-mini"
         },
         {
             "id": "benchmark",
