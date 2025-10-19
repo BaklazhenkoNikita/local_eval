@@ -18,10 +18,93 @@ from livebench.common import (
 from livebench.model import get_model_config
 
 
-def calculate_usage(args, df, questions_all):
+def show_individual_test_summary(args, df, questions_all, bench, model_filter, valid_question_ids):
+    """Show summary for a single test."""
+    summary_data = {}
+
+    # Load model answer files for this specific benchmark
+    answer_files = glob.glob(f"data/{bench}/**/model_answer/*.jsonl", recursive=True)
+
+    if not answer_files:
+        return  # Silently skip if no results
+
+    for answer_file in answer_files:
+        if os.path.exists(answer_file):
+            answers = pd.read_json(answer_file, lines=True)
+
+            if len(answers) == 0 or 'model_id' not in answers.columns:
+                continue
+
+            # Filter to only include valid question IDs
+            answers = answers[answers['question_id'].isin(valid_question_ids)]
+
+            if len(answers) == 0:
+                continue
+
+            model_id = answers['model_id'].iloc[0]
+
+            # Skip if we're filtering by model list and this model isn't in it
+            if model_filter is not None and model_id.lower() not in model_filter:
+                continue
+
+            # Find matching model name from df
+            matching_models = [m for m in set(df["model"]) if isinstance(m, str) and m.lower() == model_id.lower()]
+
+            for model in matching_models:
+                if model in summary_data:
+                    continue
+
+                model_summary = {}
+
+                # Get score for this model
+                model_scores = df[df["model"] == model]["score"]
+                if len(model_scores) > 0:
+                    avg_score = model_scores.mean()
+                    model_summary['Score'] = round(avg_score, 1)
+
+                # Number of questions answered
+                model_summary['Questions'] = len(answers)
+
+                # Total tokens
+                if 'total_output_tokens' in answers.columns:
+                    valid_tokens = answers[answers['total_output_tokens'] != -1]['total_output_tokens']
+                    if len(valid_tokens) > 0:
+                        model_summary['Total Tokens'] = int(valid_tokens.sum())
+
+                # Total time
+                total_time = None
+                if 'total_inference_time_seconds' in answers.columns:
+                    valid_times = answers[pd.notna(answers['total_inference_time_seconds'])]['total_inference_time_seconds']
+                    if len(valid_times) > 0:
+                        total_time = valid_times.sum()
+
+                if total_time is None and 'tstamp' in answers.columns:
+                    timestamps = answers['tstamp'].dropna()
+                    if len(timestamps) > 1:
+                        total_time = timestamps.max() - timestamps.min()
+
+                if total_time is not None and total_time > 0:
+                    model_summary['Total Time (s)'] = round(total_time, 2)
+
+                    if 'Total Tokens' in model_summary:
+                        avg_toks = model_summary['Total Tokens'] / total_time
+                        model_summary['Avg Tok/s'] = round(avg_toks, 2)
+
+                if model_summary:
+                    summary_data[model] = model_summary
+
+    if summary_data:
+        summary_df = pd.DataFrame(summary_data).T
+        col_order = ['Score', 'Questions', 'Total Tokens', 'Total Time (s)', 'Avg Tok/s']
+        available_cols = [col for col in col_order if col in summary_df.columns]
+        summary_df = summary_df[available_cols]
+        with pd.option_context('display.max_rows', None, 'display.max_columns', None):
+            print(summary_df)
+
+
+def calculate_usage(args, df, questions_all, release_set):
     """Calculate average token usage and timing metrics for all answers by task and category."""
-    print("\nCalculating token usage and performance metrics...")
-    
+
     # Get the set of valid question IDs
     valid_question_ids = {q['question_id'] for q in questions_all}
     
@@ -124,8 +207,7 @@ def calculate_usage(args, df, questions_all):
             usage_data.append(usage_entry)
     
     if not usage_data:
-        print("No token usage data found.")
-        return
+        return  # No data available, skip silently
         
     # Create dataframe from collected data
     usage_df = pd.DataFrame(usage_data)
@@ -145,12 +227,7 @@ def calculate_usage(args, df, questions_all):
         if category not in tasks_by_category:
             tasks_by_category[category] = set()
         tasks_by_category[category].add(task)
-    
-    # Debug print to check tasks_by_category
-    print("\nTasks by category (from raw df):")
-    for category, tasks in tasks_by_category.items():
-        print(f"{category}: {sorted(tasks)}")
-    
+
     # Calculate averages
     category_pivot = pd.pivot_table(
         category_usage, 
@@ -220,11 +297,39 @@ def calculate_usage(args, df, questions_all):
     category_pivot.to_csv('group_usage.csv')
     
     # Calculate and display benchmark summary statistics
-    print("\n########## Benchmark Summary ##########")
+    # If multiple benchmarks, show individual results first
+    if len(args.bench_name) > 1:
+        print("\n########## Individual Test Results ##########")
+        for bench in args.bench_name:
+            # Load questions for this specific benchmark
+            bench_questions = []
+            list_of_question_files = []
+            original_question_file = f"data/{bench}/question.jsonl"
+            if os.path.exists(original_question_file):
+                list_of_question_files = [original_question_file]
+            else:
+                list_of_question_files = glob.glob(f"data/{bench}/**/question.jsonl", recursive=True)
 
-    summary_data = {}
+            for question_file in list_of_question_files:
+                questions = load_questions_jsonl(question_file, release_set, args.livebench_release_option, None)
+                bench_questions.extend(questions)
 
-    # Load all model answer files fresh to get complete timing data
+            # Get question IDs for this benchmark
+            bench_question_ids = {q['question_id'] for q in bench_questions}
+
+            # Filter df for this specific benchmark
+            bench_df = df[df['question_id'].isin(bench_question_ids)]
+
+            if len(bench_df) > 0 and len(bench_questions) > 0:
+                print(f"\n=== {bench} ===")
+                # Show summary for this specific test
+                show_individual_test_summary(args, bench_df, bench_questions, bench, model_filter, valid_question_ids)
+
+    print("\n########## Combined Benchmark Summary ##########")
+
+    # Collect all answer data by model across all benchmarks
+    all_answers_by_model = {}
+
     for bench in args.bench_name:
         answer_files = glob.glob(f"data/{bench}/**/model_answer/*.jsonl", recursive=True)
 
@@ -251,51 +356,88 @@ def calculate_usage(args, df, questions_all):
                 matching_models = [m for m in set(df["model"]) if isinstance(m, str) and m.lower() == model_id.lower()]
 
                 for model in matching_models:
-                    if model in summary_data:
-                        continue  # Already processed this model
+                    if model not in all_answers_by_model:
+                        all_answers_by_model[model] = []
+                    all_answers_by_model[model].append(answers)
 
-                    model_summary = {}
+    # Now aggregate the data for each model
+    summary_data = {}
+    for model, answer_list in all_answers_by_model.items():
+        # Combine all answers for this model
+        combined_answers = pd.concat(answer_list, ignore_index=True)
 
-                    # Get score for this model
-                    model_scores = df[df["model"] == model]["score"]
-                    if len(model_scores) > 0:
-                        avg_score = model_scores.mean()
-                        model_summary['Score'] = round(avg_score, 1)
+        # Filter to only include answers that have judgments (are in df)
+        model_question_ids = set(df[df["model"] == model]["question_id"])
+        combined_answers = combined_answers[combined_answers['question_id'].isin(model_question_ids)]
 
-                    # Number of questions answered
-                    model_summary['Questions'] = len(answers)
+        if len(combined_answers) == 0:
+            continue
 
-                    # Total tokens across all questions
-                    if 'total_output_tokens' in answers.columns:
-                        valid_tokens = answers[answers['total_output_tokens'] != -1]['total_output_tokens']
-                        if len(valid_tokens) > 0:
-                            total_tokens = valid_tokens.sum()
-                            model_summary['Total Tokens'] = int(total_tokens)
+        model_summary = {}
 
-                    # Total time across all questions
-                    total_time = None
-                    if 'total_inference_time_seconds' in answers.columns:
-                        valid_times = answers[pd.notna(answers['total_inference_time_seconds'])]['total_inference_time_seconds']
-                        if len(valid_times) > 0:
-                            total_time = valid_times.sum()
+        # Get score for this model across all benchmarks
+        model_scores = df[df["model"] == model]["score"]
+        if len(model_scores) > 0:
+            avg_score = model_scores.mean()
+            model_summary['Score'] = round(avg_score, 1)
 
-                    # If no inference time available, estimate from timestamps
-                    if total_time is None and 'tstamp' in answers.columns:
-                        timestamps = answers['tstamp'].dropna()
-                        if len(timestamps) > 1:
-                            # Calculate total time as difference between earliest and latest timestamp
-                            total_time = timestamps.max() - timestamps.min()
+        # Number of questions answered
+        model_summary['Questions'] = len(combined_answers)
 
-                    if total_time is not None and total_time > 0:
-                        model_summary['Total Time (s)'] = round(total_time, 2)
+        # Total tokens across all questions
+        if 'total_output_tokens' in combined_answers.columns:
+            valid_tokens = combined_answers[combined_answers['total_output_tokens'] != -1]['total_output_tokens']
+            if len(valid_tokens) > 0:
+                total_tokens = valid_tokens.sum()
+                model_summary['Total Tokens'] = int(total_tokens)
 
-                        # Calculate overall average tok/s = total_tokens / total_time
-                        if 'Total Tokens' in model_summary:
-                            avg_toks = model_summary['Total Tokens'] / total_time
-                            model_summary['Avg Tok/s'] = round(avg_toks, 2)
+        # Total time across all questions
+        total_time = None
+        if 'total_inference_time_seconds' in combined_answers.columns:
+            valid_times = combined_answers[pd.notna(combined_answers['total_inference_time_seconds'])]['total_inference_time_seconds']
+            if len(valid_times) > 0:
+                total_time = valid_times.sum()
 
-                    if model_summary:
-                        summary_data[model] = model_summary
+        # If no inference time available, estimate from timestamps per benchmark
+        if total_time is None and 'tstamp' in combined_answers.columns:
+            # For API models, we need to sum timing per benchmark, not across all benchmarks
+            # Group by benchmark and calculate time for each
+            total_time = 0
+            for bench in args.bench_name:
+                # Get answers for this benchmark
+                bench_question_ids = set()
+                list_of_question_files = []
+                original_question_file = f"data/{bench}/question.jsonl"
+                if os.path.exists(original_question_file):
+                    list_of_question_files = [original_question_file]
+                else:
+                    list_of_question_files = glob.glob(f"data/{bench}/**/question.jsonl", recursive=True)
+
+                for question_file in list_of_question_files:
+                    questions = load_questions_jsonl(question_file, release_set, args.livebench_release_option, None)
+                    bench_question_ids.update([q['question_id'] for q in questions])
+
+                # Filter answers to this benchmark
+                bench_answers = combined_answers[combined_answers['question_id'].isin(bench_question_ids)]
+                if len(bench_answers) > 0 and 'tstamp' in bench_answers.columns:
+                    timestamps = bench_answers['tstamp'].dropna()
+                    if len(timestamps) > 1:
+                        bench_time = timestamps.max() - timestamps.min()
+                        total_time += bench_time
+
+            if total_time == 0:
+                total_time = None
+
+        if total_time is not None and total_time > 0:
+            model_summary['Total Time (s)'] = round(total_time, 2)
+
+            # Calculate overall average tok/s = total_tokens / total_time
+            if 'Total Tokens' in model_summary:
+                avg_toks = model_summary['Total Tokens'] / total_time
+                model_summary['Avg Tok/s'] = round(avg_toks, 2)
+
+        if model_summary:
+            summary_data[model] = model_summary
 
     if summary_data:
         summary_df = pd.DataFrame(summary_data).T
@@ -313,12 +455,12 @@ def display_result_single(args):
 
     if args.livebench_release_option not in LIVE_BENCH_RELEASES:
         raise ValueError(f"Bad release {args.livebench_release_option}.")
-    print(f"Using release {args.livebench_release_option}")
     release_set = set([
         r for r in LIVE_BENCH_RELEASES if r <= args.livebench_release_option
     ])
 
     input_files = []
+    benchmarks_with_results = []
     for bench in args.bench_name:
         files = (
             glob.glob(f"data/{bench}/**/model_judgment/ground_truth_judgment.jsonl", recursive=True)
@@ -327,8 +469,13 @@ def display_result_single(args):
             files += (
                 glob.glob(f"prompt_testing/{bench}/**/model_judgment/ground_truth_judgment.jsonl", recursive=True)
             )
-        input_files += files
-    
+        if files:
+            input_files += files
+            benchmarks_with_results.append(bench)
+
+    # Filter to only benchmarks that have results
+    args.bench_name = benchmarks_with_results
+
     questions_all = []
     if args.question_source == "huggingface":
         categories = {}
@@ -362,12 +509,13 @@ def display_result_single(args):
                 list_of_question_files = glob.glob(f"data/{bench}/**/question.jsonl", recursive=True)
 
             for question_file in list_of_question_files:
-                print(question_file)
                 questions = load_questions_jsonl(question_file, release_set, args.livebench_release_option, None)
                 questions_all.extend(questions)
-
-    print('loaded ', len(questions_all), ' questions')
     question_id_set = set([q['question_id'] for q in questions_all])
+
+    # Check if we have any judgment files
+    if not input_files or len(benchmarks_with_results) == 0:
+        return
 
     df_all = pd.concat((pd.read_json(f, lines=True) for f in input_files), ignore_index=True)
     df = df_all[["model", "score", "task", "category","question_id"]]
@@ -379,39 +527,14 @@ def display_result_single(args):
     if args.model_list is not None:
         model_list = [get_model_config(x).display_name for x in args.model_list]
         df = df[df["model"].isin([x.lower() for x in model_list])]
-        model_list_to_check = model_list
-    else:
-        model_list_to_check = set(df["model"])
-    for model in model_list_to_check:
-        df_model = df[df["model"] == model]
 
-        missing_question_ids = set([q['question_id'] for q in questions_all]) - set(df_model['question_id'])
-        
-        if len(missing_question_ids) > 0 and not args.ignore_missing_judgments:
-            if args.verbose:
-                print('removing model', model, "has missing", len(questions_all) - len(df_model), "judgments - has ", len(df_model))
-                if len(missing_question_ids) < 10:
-                    print('missing ids', missing_question_ids)
-                missing_questions = [q for q in questions_all if q['question_id'] in missing_question_ids]
-                missing_tasks = set([q['task'] for q in missing_questions])
-                print('missing tasks', missing_tasks)
-            df = df[df["model"] != model]
-        elif len(missing_question_ids) > 0 and args.ignore_missing_judgments:
-            questions_all = [q for q in questions_all if q['question_id'] in df_model['question_id'].values]
-    
-    if args.ignore_missing_judgments and len(questions_all) == 0:
-        raise ValueError("No questions left after ignoring missing judgments.")
-    
-    if args.ignore_missing_judgments:
-        print(f"{len(questions_all)} questions after removing those with missing judgments.")
-
-    
-    df = df[df['question_id'].isin([q['question_id'] for q in questions_all])]
+    # Keep all models - compute averages based on available data for each model
+    # No filtering based on missing judgments
 
     df.to_csv('df_raw.csv')
 
     # Always try to show usage information if available (includes scores, tokens, timing)
-    calculate_usage(args, df, questions_all)
+    calculate_usage(args, df, questions_all, release_set)
 
     # Save separate CSV files for backwards compatibility
     df_tasks = df[["model", "score", "task"]].groupby(["model", "task"]).mean()

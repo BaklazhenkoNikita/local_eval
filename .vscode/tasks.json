@@ -115,6 +115,50 @@
                 "panel": "shared"
             }
         },
+        {
+            "label": "LiveBench: Show All Tests Results",
+            "type": "shell",
+            "command": "${workspaceFolder}/.venv/bin/python3",
+            "args": [
+                "show_livebench_result.py",
+                "--bench-name",
+                "custom_tests/basic_math",
+                "custom_tests/advanced_math",
+                "custom_tests/translation",
+                "live_bench/reasoning/web_of_lies_v2",
+                "live_bench/reasoning/zebra_puzzle",
+                "live_bench/reasoning/spatial",
+                "live_bench/math/AMPS_Hard",
+                "live_bench/math/math_comp",
+                "live_bench/math/olympiad",
+                "live_bench/coding/coding_completion",
+                "live_bench/coding/LCB_generation",
+                "live_bench/data_analysis/cta",
+                "live_bench/data_analysis/tablejoin",
+                "live_bench/data_analysis/tablereformat",
+                "live_bench/instruction_following/paraphrase",
+                "live_bench/instruction_following/simplify",
+                "live_bench/instruction_following/story_generation",
+                "live_bench/instruction_following/summarize",
+                "live_bench/language/typos",
+                "live_bench/language/connections",
+                "live_bench/language/plot_unscrambling",
+                "--question-source",
+                "jsonl",
+                "--livebench-release-option",
+                "2024-11-25"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/livebench"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            }
+        }
     ],
     "inputs": [
         {
