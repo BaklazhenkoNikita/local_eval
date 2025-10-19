@@ -6,6 +6,7 @@ This script consolidates the functionality of the bash scripts into a single Pyt
 
 import argparse
 import os
+import sys
 import time
 import libtmux
 import subprocess
@@ -235,10 +236,10 @@ def build_run_command(
     """Build the command to run gen_api_answer and gen_ground_truth_judgment in sequence"""
     
     # Build gen_api_answer command
-    gen_api_cmd = f"python -u gen_api_answer.py --model {model} --question-source {question_source}"
-    
+    gen_api_cmd = f"{sys.executable} -u gen_api_answer.py --model {model} --question-source {question_source}"
+
     # Build gen_ground_truth_judgment command
-    gen_judge_cmd = f"python -u gen_ground_truth_judgment.py --question-source {question_source}"
+    gen_judge_cmd = f"{sys.executable} -u gen_ground_truth_judgment.py --question-source {question_source}"
     if model:
         gen_judge_cmd += f" --model {model}"
     

@@ -1,6 +1,3 @@
-# Basic math grading utilities
-# Simpler version adapted from AMPS_Hard for basic arithmetic operations
-
 import re
 import warnings
 from livebench.process_results.util import last_boxed_only_string, remove_boxed
@@ -33,18 +30,15 @@ def basic_math_process_results(ground_truth: str, llm_answer: str, debug=False) 
     if isinstance(ground_truth, list):
         ground_truth = ground_truth[-1]
 
-    # Clean up the answer
     llm_answer = llm_answer.replace("\\\\fbox{", "\\\\boxed{")
     llm_answer = llm_answer.replace("\\dfrac", "\\frac")
     llm_answer = llm_answer.replace("\\tfrac", "\\frac")
     llm_answer = llm_answer.replace("\n", " ")
 
-    # Try to extract answer from \boxed{}
     last_boxed = last_boxed_only_string(llm_answer)
     if last_boxed:
         parsed_answer = normalize_final_answer(remove_boxed(last_boxed))
 
-    # If no boxed answer found, try to extract from last $ $
     if parsed_answer is None:
         last_line = llm_answer.split('\n')[-1]
         if last_line.count('$') >= 2:
@@ -57,7 +51,6 @@ def basic_math_process_results(ground_truth: str, llm_answer: str, debug=False) 
                 math = math.split('=')[-1].strip()
             parsed_answer = normalize_final_answer(math)
 
-    # Compare answers
     if parsed_answer is not None:
         try:
             if is_equiv(ground_truth, parsed_answer):
@@ -65,7 +58,6 @@ def basic_math_process_results(ground_truth: str, llm_answer: str, debug=False) 
         except Exception as e:
             warnings.warn(f"Error when comparing ground truth and parsed answer: {e}")
 
-    # Fallback: try string matching
     if retval == 0 and parsed_answer is None:
         if len(llm_answer) > 0 and llm_answer[-1] == '.':
             llm_answer = llm_answer[:-1]
@@ -94,24 +86,19 @@ def is_equiv(x1: str, x2: str) -> bool:
         True if equivalent, False otherwise
     """
     try:
-        # First try simple string comparison (after normalization)
         if x1.strip() == x2.strip():
             return True
 
-        # Try parsing as LaTeX
         try:
             parsed_x1 = parse_latex(x1)
             parsed_x2 = parse_latex(x2)
         except:
-            # If LaTeX parsing fails, try parsing as plain expressions
             try:
                 parsed_x1 = sympy.sympify(x1)
                 parsed_x2 = sympy.sympify(x2)
             except:
-                # If all parsing fails, do string comparison
                 return x1.replace(" ", "") == x2.replace(" ", "")
 
-        # Compare using sympy
         try:
             diff = parsed_x1 - parsed_x2
             if sympy.simplify(diff) == 0:
@@ -119,7 +106,6 @@ def is_equiv(x1: str, x2: str) -> bool:
         except:
             pass
 
-        # Try comparing absolute difference
         try:
             if sympy.Abs(sympy.simplify(diff)) < 0.001:
                 return True
@@ -142,23 +128,18 @@ def normalize_final_answer(final_answer: str) -> str:
     Returns:
         Normalized answer string
     """
-    # Extract from = sign if present
     final_answer = final_answer.split("=")[-1].strip()
 
-    # Remove LaTeX formatting
     final_answer = re.sub(r"(.*?)(\$)(.*?)(\$)(.*)", "$\\3$", final_answer)
     final_answer = re.sub(r"(\\text\{)(.*?)(\})", "\\2", final_answer)
     final_answer = re.sub(r"(\\textbf\{)(.*?)(\})", "\\2", final_answer)
     final_answer = re.sub(r"(\\boxed\{)(.*)(\})", "\\2", final_answer)
 
-    # Normalize fraction shorthand
     final_answer = re.sub(r"(frac)([^{])(.)", "frac{\\2}{\\3}", final_answer)
     final_answer = re.sub(r"(sqrt)([^{\[])", "sqrt{\\2}", final_answer)
 
-    # Remove $ signs
     final_answer = final_answer.replace("$", "")
 
-    # Normalize numbers with commas
     if final_answer.replace(",", "").replace(".", "").replace("-", "").isdigit():
         final_answer = final_answer.replace(",", "")
 
